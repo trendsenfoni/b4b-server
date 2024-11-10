@@ -1,0 +1,11 @@
+version: '3.9'
+
+services:
+  api:
+    container_name: aliabiapi
+    build: .
+    ports:
+      - 3321:3321
+#    environment:
+#      HTTP_PORT: 3321
+#      MONGODB_URI:
