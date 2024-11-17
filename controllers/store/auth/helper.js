@@ -1,4 +1,4 @@
-const auth = require('../../lib/auth')
+const auth = require('../../../lib/auth')
 const { ObjectId } = require('mongodb')
 exports.saveSession = async function (memberDoc, role, req, loginProvider = 'aliabi', oauth2 = null) {
 	let deviceId = req.getValue('deviceId') || ''

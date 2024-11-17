@@ -13,6 +13,7 @@ module.exports = function (dbModel) {
 			dbName: { type: String, default: '' },
 			domain: { type: String, default: '', index: true },
 			logo: { type: String, default: '' },
+			icon: { type: String, default: '' },
 			slogan: { type: String, default: '' },
 			description: { type: String, default: '' },
 			passive: { type: Boolean, default: false, index: true },
@@ -58,6 +59,8 @@ module.exports = function (dbModel) {
 					filePath: { type: String, default: '' },
 				}
 			},
+			serviceExpireDate: { type: String, default: new Date(new Date().setMonth(new Date().getMonth() + 2)).toISOString().substring(0, 10), index: true },
+			manifest: {},
 		},
 		{ versionKey: false, timestamps: true }
 	)

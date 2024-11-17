@@ -63,6 +63,7 @@ async function saveAdminSession(adminDoc, req) {
 		console.error('saveSession err:', err)
 	}
 
+
 	return new Promise(async (resolve, reject) => {
 		try {
 
@@ -91,9 +92,9 @@ async function saveAdminSession(adminDoc, req) {
 					let obj = {
 						admintoken: 'ADMIN_' + auth.sign({ sessionId: newDoc._id.toString() }),
 						lang: newDoc.lang,
-						adminUser: adminDoc.toJSON(),
+						user: adminDoc.toJSON(),
 					}
-					delete obj.adminUser.password
+					delete obj.user.password
 					resolve(obj)
 				})
 				.catch(reject)

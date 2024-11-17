@@ -2,7 +2,6 @@ const { saveSession } = require('./helper')
 module.exports = (req) => new Promise(async (resolve, reject) => {
 	if (req.method != 'POST') return restError.method(req, reject)
 
-	let username = null
 	let email = null
 	let phoneNumber = null
 	let identifier = null

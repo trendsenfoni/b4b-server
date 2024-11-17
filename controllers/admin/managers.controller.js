@@ -3,7 +3,9 @@ module.exports = (dbModel, adminSessionDoc, req) => new Promise(async (resolve, 
 
   switch (req.method) {
     case 'GET':
-      if (req.params.param1 != undefined) {
+      if (req.params.param1 == 'checkEmail') {
+        checkEmail(dbModel, adminSessionDoc, req).then(resolve).catch(reject)
+      } else if (req.params.param1 != undefined) {
         getOne(dbModel, adminSessionDoc, req).then(resolve).catch(reject)
       } else {
         getList(dbModel, adminSessionDoc, req).then(resolve).catch(reject)
@@ -25,6 +27,18 @@ module.exports = (dbModel, adminSessionDoc, req) => new Promise(async (resolve, 
   }
 })
 
+function checkEmail(dbModel, adminSessionDoc, req) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      if (!req.params.param2)
+        return reject(`param2 required`)
+      const c = await dbModel.managers.countDocuments({ email: req.params.param2.toLowerCase() })
+
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
 function getOne(dbModel, adminSessionDoc, req) {
   return new Promise((resolve, reject) => {
     dbModel.managers
@@ -54,10 +68,18 @@ function getList(dbModel, adminSessionDoc, req) {
 }
 
 function post(dbModel, adminSessionDoc, req) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     let data = req.body || {}
     data._id = undefined
     if (!data.email) return reject(`email required`)
+    data.email = data.email.toLowerCase()
+    if (!util.isValidEmail(data.email)) return reject(`invalid email address`)
+
+    if (data.email) {
+      if (await dbModel.managers.countDocuments({ email: data.email }) > 0)
+        return reject(`email in use`)
+    }
+
     if (!data.username) {
       data._id = new ObjectId()
       data.username = data._id
@@ -65,6 +87,11 @@ function post(dbModel, adminSessionDoc, req) {
     if (!data.firstName) return reject(`first name required`)
     if (!data.lastName) return reject(`last name required`)
     if ((data.password || '').length < 8) return reject(`password must be at least 8 characters long`)
+
+    if (data.username) {
+      if (await dbModel.managers.countDocuments({ username: data.username }) > 0)
+        return reject(`username in use`)
+    }
 
     let newDoc = new dbModel.managers(data)
     if (!epValidateSync(newDoc, reject)) return
@@ -82,8 +109,17 @@ function put(dbModel, adminSessionDoc, req) {
 
     dbModel.managers
       .findOne({ _id: req.params.param1 })
-      .then(doc => {
+      .then(async doc => {
         if (doc) {
+          if (data.email) {
+            if (await dbModel.managers.countDocuments({ email: data.email, _id: { $ne: doc._id } }) > 0)
+              return reject(`email in use`)
+          }
+          if (data.username) {
+            if (await dbModel.managers.countDocuments({ username: data.username, _id: { $ne: doc._id } }) > 0)
+              return reject(`username in use`)
+          }
+
           let newDoc = Object.assign(doc, data)
 
           if (!epValidateSync(newDoc, reject)) return

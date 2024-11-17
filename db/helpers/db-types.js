@@ -832,9 +832,11 @@ const permissionSchemaType = {
 	canExportHtml: { type: Boolean, default: false },
 }
 
+const currencyList = ['USD', 'EUR', 'TRY', 'GBP', 'RUB', 'AZN', 'AED']
 module.exports = Object.freeze({
-  permissionType:permissionType,
-  permissionSchemaType:permissionSchemaType,
+	currencyList: currencyList,
+	permissionType: permissionType,
+	permissionSchemaType: permissionSchemaType,
 	valueType: valueType,
 	idType: idType,
 	numberValueType: numberValueType,

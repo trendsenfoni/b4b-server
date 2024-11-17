@@ -31,16 +31,22 @@ module.exports = (app) => {
     res.status(200).json({ success: true, data: apiWelcomeMessage })
   })
 
-  authControllers(app, '/api/v1/auth/:func/:param1/:param2/:param3')
-  sessionControllers(app, '/api/v1/session/:func/:param1/:param2/:param3')
+
   adminAuthControllers(app, '/api/v1/admin/auth/:func/:param1/:param2/:param3')
   adminControllers(app, '/api/v1/admin/:func/:param1/:param2/:param3')
-  managerAuthControllers(app, '/api/v1/manager/auth/:func/:param1/:param2/:param3')
-  managerControllers(app, '/api/v1/manager/:func/:param1/:param2/:param3')
+
+  // managerAuthControllers(app, '/api/v1/manager/auth/:func/:param1/:param2/:param3')
+  // managerControllers(app, '/api/v1/manager/:func/:param1/:param2/:param3')
 
   s3Controllers(app, '/api/v1/s3/:func/:param1/:param2/:param3')
-  repoControllers(app, '/api/v1/db/:func/:param1/:param2/:param3')
-  masterControllers(app, '/api/v1/:func/:param1/:param2/:param3')
+  // repoControllers(app, '/api/v1/db/:func/:param1/:param2/:param3')
+  pubControllers(app, '/api/v1/pub/:func/:param1/:param2/:param3')
+
+  storeAuthControllers(app, '/api/v1/:store/auth/:func/:param1/:param2/:param3')
+  storeSessionControllers(app, '/api/v1/:store/session/:func/:param1/:param2/:param3')
+
+  storeControllers(app, '/api/v1/:store/:func/:param1/:param2/:param3')
+
 
 
   app.use((req, res, next) => {
@@ -49,6 +55,134 @@ module.exports = (app) => {
 
   app.use((err, req, res, next) => {
     sendError(err, req, res)
+  })
+}
+
+
+function storeAuthControllers(app, route) {
+  setRoutes(app, route, (req, res, next) => {
+    const ctl = getController('/auth', req.params.func)
+    let spam = spamCheck(req.IP)
+    if (!spam) {
+      if (ctl) {
+        ctl(req)
+          .then((data) => {
+            if (data == undefined) res.json({ success: true })
+            else if (data == null) res.json({ success: true })
+            else {
+              res.status(200).json({
+                success: true,
+                data: data,
+              })
+            }
+          })
+          .catch(next)
+      } else next()
+    } else {
+      next(`Suspicious login attempts. Try again after ${spam} seconds.`)
+    }
+  })
+}
+
+function storeSessionControllers(app, route) {
+  setRoutes(app, route, (req, res, next) => {
+    const ctl = getController('/session', req.params.func)
+    if (ctl) {
+      storePassport(req)
+        .then((sessionDoc) => {
+          ctl(db, sessionDoc, req)
+            .then((data) => {
+              if (data == undefined) res.json({ success: true })
+              else if (data == null) res.json({ success: true })
+              else {
+                res.status(200).json({ success: true, data: data })
+              }
+            })
+            .catch(next)
+        })
+        .catch((err) => {
+          res.status(401).json({ success: false, error: err })
+        })
+    } else next()
+  })
+}
+
+
+function storeControllers(app, route) {
+  setRoutes(app, route, (req, res, next) => {
+    const ctl = getController('/master', req.params.func)
+    if (ctl) {
+      storePassport(req)
+        .then((sessionDoc) => {
+          ctl(db, sessionDoc, req)
+            .then((data) => {
+              if (data == undefined) res.json({ success: true })
+              else if (data == null) res.json({ success: true })
+              else {
+                res.status(200).json({ success: true, data: data })
+              }
+            })
+            .catch(next)
+        })
+        .catch((err) => {
+          res.status(401).json({ success: false, error: err })
+        })
+    } else next()
+  })
+}
+
+
+function storePassport(req) {
+  return new Promise((resolve, reject) => {
+    let token = req.getValue('token')
+    if (token) {
+      token = token.split('AABI_')[1]
+      auth
+        .verify(token)
+        .then((decoded) => {
+          db.sessions
+            .findOne({ _id: decoded.sessionId })
+            .then((sessionDoc) => {
+
+              if (sessionDoc) {
+                if (sessionDoc.closed) {
+                  reject('session closed')
+                } else {
+                  sessionDoc.lastOnline = new Date()
+                  sessionDoc.lastIP = req.IP
+                  sessionDoc.save()
+                    .then(resolve)
+                    .catch(reject)
+
+                }
+              } else {
+                reject('session not found. login again.')
+              }
+            })
+            .catch(reject)
+        })
+        .catch(reject)
+    } else {
+      reject('authorization failed. token is empty.')
+    }
+  })
+}
+
+function pubControllers(app, route) {
+  setRoutes(app, route, (req, res, next) => {
+    const ctl = getController('/pub', req.params.func)
+    let spam = spamCheck(req.IP)
+    if (!spam) {
+      if (ctl) {
+        ctl(req, res)
+          .then((data) => {
+            // res.end()
+          })
+          .catch(next)
+      } else next()
+    } else {
+      next(`Suspicious login attempts. Try again after ${spam} seconds.`)
+    }
   })
 }
 
@@ -100,78 +234,6 @@ function managerControllers(app, route) {
   })
 }
 
-
-function authControllers(app, route) {
-  setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/auth', req.params.func)
-    let spam = spamCheck(req.IP)
-    if (!spam) {
-      if (ctl) {
-        ctl(req)
-          .then((data) => {
-            if (data == undefined) res.json({ success: true })
-            else if (data == null) res.json({ success: true })
-            else {
-              res.status(200).json({
-                success: true,
-                data: data,
-              })
-            }
-          })
-          .catch(next)
-      } else next()
-    } else {
-      next(`Suspicious login attempts. Try again after ${spam} seconds.`)
-    }
-  })
-}
-
-function sessionControllers(app, route) {
-  setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/session', req.params.func)
-    if (ctl) {
-      passport(req)
-        .then((sessionDoc) => {
-          ctl(db, sessionDoc, req)
-            .then((data) => {
-              if (data == undefined) res.json({ success: true })
-              else if (data == null) res.json({ success: true })
-              else {
-                res.status(200).json({ success: true, data: data })
-              }
-            })
-            .catch(next)
-        })
-        .catch((err) => {
-          res.status(401).json({ success: false, error: err })
-        })
-    } else next()
-  })
-}
-
-
-function masterControllers(app, route) {
-  setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/master', req.params.func)
-    if (ctl) {
-      passport(req)
-        .then((sessionDoc) => {
-          ctl(db, sessionDoc, req)
-            .then((data) => {
-              if (data == undefined) res.json({ success: true })
-              else if (data == null) res.json({ success: true })
-              else {
-                res.status(200).json({ success: true, data: data })
-              }
-            })
-            .catch(next)
-        })
-        .catch((err) => {
-          res.status(401).json({ success: false, error: err })
-        })
-    } else next()
-  })
-}
 
 
 function repoControllers(app, route) {
@@ -260,6 +322,41 @@ function adminControllers(app, route) {
           res.status(401).json({ success: false, error: err })
         })
     } else next()
+  })
+}
+
+function adminPassport(req) {
+  return new Promise((resolve, reject) => {
+    let admintoken = req.getValue('admintoken')
+    if (admintoken) {
+      admintoken = admintoken.split('ADMIN_')[1]
+      auth
+        .verify(admintoken)
+        .then(decoded => {
+          db.adminSessions
+            .findOne({ _id: decoded.sessionId })
+            .then((sessionDoc) => {
+              if (sessionDoc) {
+                if (sessionDoc.closed) {
+                  reject('session closed')
+                } else {
+                  sessionDoc.lastOnline = new Date()
+                  sessionDoc.lastIP = req.IP
+                  sessionDoc.save()
+                    .then(resolve)
+                    .catch(reject)
+
+                }
+              } else {
+                reject('admin session not found. login again.')
+              }
+            })
+            .catch(reject)
+        })
+        .catch(reject)
+    } else {
+      reject('authorization failed. admintoken is empty.')
+    }
   })
 }
 
@@ -364,77 +461,6 @@ function getController(pathName, funcName) {
   }
 }
 
-function passport(req) {
-  return new Promise((resolve, reject) => {
-    let token = req.getValue('token')
-    if (token) {
-      token = token.split('AABI_')[1]
-      auth
-        .verify(token)
-        .then((decoded) => {
-          db.sessions
-            .findOne({ _id: decoded.sessionId })
-            .then((sessionDoc) => {
-
-              if (sessionDoc) {
-                if (sessionDoc.closed) {
-                  reject('session closed')
-                } else {
-                  sessionDoc.lastOnline = new Date()
-                  sessionDoc.lastIP = req.IP
-                  sessionDoc.save()
-                    .then(resolve)
-                    .catch(reject)
-
-                }
-              } else {
-                reject('session not found. login again.')
-              }
-            })
-            .catch(reject)
-        })
-        .catch(reject)
-    } else {
-      reject('authorization failed. token is empty.')
-    }
-  })
-}
-
-function adminPassport(req) {
-  return new Promise((resolve, reject) => {
-    let admintoken = req.getValue('admintoken')
-    if (admintoken) {
-      admintoken = admintoken.split('ADMIN_')[1]
-      auth
-        .verify(admintoken)
-        .then(decoded => {
-          db.adminSessions
-            .findOne({ _id: decoded.sessionId })
-            .then((sessionDoc) => {
-
-              if (sessionDoc) {
-                if (sessionDoc.closed) {
-                  reject('session closed')
-                } else {
-                  sessionDoc.lastOnline = new Date()
-                  sessionDoc.lastIP = req.IP
-                  sessionDoc.save()
-                    .then(resolve)
-                    .catch(reject)
-
-                }
-              } else {
-                reject('admin session not found. login again.')
-              }
-            })
-            .catch(reject)
-        })
-        .catch(reject)
-    } else {
-      reject('authorization failed. admintoken is empty.')
-    }
-  })
-}
 
 function managerPassport(req) {
   return new Promise((resolve, reject) => {

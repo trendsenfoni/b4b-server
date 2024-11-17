@@ -89,8 +89,8 @@ exports.sendToTrash = (dbModel, collectionName, session, filter) =>
               collectionName: collectionName,
               documentId: doc._id,
               document: doc,
-              deletedBy: session.username,
-              deletedById: session.member,
+              deletedBy: session && session.username || 'background',
+              deletedById: session && session.username || null,
             })
             if (!epValidateSync(rubbishDoc, reject)) return
             rubbishDoc

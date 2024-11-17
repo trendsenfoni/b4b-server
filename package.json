@@ -54,6 +54,7 @@
     "nodemailer": "^6.9.13",
     "nodemailer-smtp-transport": "^2.7.4",
     "object-sizeof": "^2.6.4",
+    "request": "^2.88.2",
     "serve-favicon": "^2.5.0",
     "sharp": "^0.33.4",
     "sib-api-v3-sdk": "^8.5.0",

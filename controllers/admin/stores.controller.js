@@ -1,4 +1,5 @@
 const userDbPrefix = process.env.USERDB_PREFIX || 'aabi_'
+const connectorAbi = require('../../lib/connectorAbi')
 module.exports = (dbModel, sessionDoc, req) =>
   new Promise(async (resolve, reject) => {
     if (!['GET', 'PATCH'].includes(req.method) && !sessionDoc) {
@@ -16,7 +17,13 @@ module.exports = (dbModel, sessionDoc, req) =>
         }
         break
       case 'POST':
-        post(dbModel, sessionDoc, req).then(resolve).catch(reject)
+        if (req.params.param1 == 'connectorTest') {
+          connectorTest(dbModel, req).then(resolve).catch(reject)
+        } else if (req.params.param1 == 'mssqlTest') {
+          mssqlTest(dbModel, req).then(resolve).catch(reject)
+        } else {
+          post(dbModel, sessionDoc, req).then(resolve).catch(reject)
+        }
 
         break
       case 'PUT':
@@ -31,16 +38,61 @@ module.exports = (dbModel, sessionDoc, req) =>
     }
   })
 
+function connectorTest(dbModel, req) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const clientId = req.getValue('clientId')
+      const clientPass = req.getValue('clientPass')
+      if (!clientId) return reject(`clientId required`)
+      if (!clientPass) return reject(`clientPass required`)
+      connectorAbi
+        .dateTime(clientId, clientPass)
+        .then(resolve)
+        .catch(reject)
+
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+function mssqlTest(dbModel, req) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const clientId = req.getValue('clientId')
+      const clientPass = req.getValue('clientPass')
+
+      const mssql = req.body.mssql
+      if (!clientId) return reject(`clientId required`)
+      if (!clientPass) return reject(`clientPass required`)
+      if (!mssql) return reject(`mssql required`)
+
+      const query = `SELECT name, object_id, create_date FROM sys.objects WHERE type='U' ORDER BY name`
+
+      connectorAbi
+        .mssql(clientId, clientPass, mssql, query)
+        .then(resolve)
+        .catch(reject)
+
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+
 function checkStore(dbModel, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
       if (!req.params.param2) return reject(`param2 required`)
       const identifier = req.params.param2.toLowerCase()
+
       const c = await dbModel.stores.countDocuments({ identifier: identifier })
+      console.log('c:', c, identifier)
       if (c == 0) {
-        return resolve({ identifier: identifier, inUse: false })
+        resolve({ identifier: identifier, inUse: false })
       } else {
-        return resolve({ identifier: identifier, inUse: true })
+        resolve({ identifier: identifier, inUse: true })
       }
     } catch (err) {
       reject(err)
@@ -86,34 +138,55 @@ function getList(dbModel, sessionDoc, req) {
 
 function post(dbModel, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
-    let data = req.body || {}
-    delete data._id
-    if (!data.name) return reject('name required')
-    if (!data.identifier) return reject('identifier required')
-    if (!data.owner) return reject('owner required')
-    const ownerDoc = await dbModel.managers.findOne({ _id: data.owner })
+    try {
 
-    data.identifier = data.identifier.toString().toLowerCase()
-    const c = await dbModel.stores.countDocuments({ owner: sessionDoc.manager, name: data.name })
-    if (c > 0) return reject(`name already exists`)
+      let data = req.body || {}
+      delete data._id
+      console.log('data:', data)
+      if (!data.name) return reject('name required')
+      if (!data.identifier) return reject('identifier required')
+      if (!data.owner) return reject('owner required')
 
-    data.identifier = await generateDatabaseIdentifier(data.identifier)
-    data.dbHost = process.env.MONGODB_SERVER1_URI || 'mongodb://localhost:27017/'
-    data.dbName = userDbPrefix + data.identifier
-    data.owner = ownerDoc._id
-    const newDoc = new dbModel.stores(data)
+      data.identifier = data.identifier.toString().toLowerCase()
+      const c = await dbModel.stores.countDocuments({ owner: sessionDoc.manager, name: data.name })
+      if (c > 0) return reject(`name already exists`)
 
-    if (!epValidateSync(newDoc, reject)) return
-    newDoc
-      .save()
-      .then(newDoc => {
-        newDoc = newDoc.populate([
-          { path: 'owner' },
-          { path: 'team.teamMember' }
-        ])
-        resolve(newDoc)
-      })
-      .catch(reject)
+      let ownerDoc
+      if (typeof data.owner == 'string') {
+        ownerDoc = await dbModel.managers.findOne({ _id: data.owner })
+      } else {
+        if (!data.owner.username) {
+          data._id = new ObjectId()
+          data.owner.username = data._id
+        }
+        ownerDoc = new dbModel.managers(data.owner)
+        ownerDoc = await ownerDoc.save()
+      }
+
+      if (!ownerDoc)
+        return reject(`owner couldn't be created or found`)
+
+      data.identifier = await generateDatabaseIdentifier(data.identifier)
+      data.dbHost = process.env.MONGODB_SERVER1_URI || 'mongodb://localhost:27017/'
+      data.dbName = userDbPrefix + data.identifier
+      data.owner = ownerDoc._id
+      const newDoc = new dbModel.stores(data)
+
+      if (!epValidateSync(newDoc, reject)) return
+      newDoc
+        .save()
+        .then(newDoc => {
+          newDoc = newDoc.populate([
+            { path: 'owner' },
+            { path: 'team.teamMember' }
+          ])
+          resolve(newDoc)
+        })
+        .catch(reject)
+    } catch (err) {
+      reject(err)
+    }
+
   })
 }
 
@@ -134,6 +207,7 @@ function put(dbModel, sessionDoc, req) {
         data.identifier = await generateDatabaseIdentifier(data.identifier)
       }
 
+
       dbDoc = Object.assign(dbDoc, data)
       if (!epValidateSync(dbDoc, reject)) return
       if (await dbModel.stores.countDocuments({ name: dbDoc.name, _id: { $ne: dbDoc._id } }) > 0)
@@ -141,10 +215,19 @@ function put(dbModel, sessionDoc, req) {
       if (await dbModel.stores.countDocuments({ identifier: dbDoc.identifier, _id: { $ne: dbDoc._id } }) > 0)
         return reject(`identifier already exists`)
 
+
+
       dbDoc.save()
-        .then(result => {
-          let obj = result.toJSON()
+        .then(async newDoc => {
+          let obj = newDoc.toJSON()
           delete obj.dbHost
+          if (data.owner && typeof data.owner != 'string') {
+            let managerDoc = await dbModel.managers.findOne({ _id: newDoc.owner })
+            managerDoc = Object.assign(managerDoc, data.owner)
+            managerDoc = await managerDoc.save()
+            obj.owner = managerDoc.toJSON()
+          }
+
           resolve(obj)
         })
         .catch(reject)

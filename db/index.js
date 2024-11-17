@@ -107,7 +107,7 @@ global.getRepoDbModel = (memberId, dbName, dbServer) =>
     // if (serverList[dbServer]) {
     // dbModel.conn = serverList[dbServer].useDb(dbName)
     const mongoAddress = `${process.env.MONGODB_SERVER1_URI}${dbName}`
-    console.log('mongoAddress:', mongoAddress)
+    // console.log('mongoAddress:', mongoAddress)
 
 
     dbModel.conn = mongoose.createConnection(mongoAddress, { autoIndex: true })
@@ -129,7 +129,7 @@ global.getRepoDbModel = (memberId, dbName, dbServer) =>
           }
         })
       }
-      eventLog(dbModel.nameLog, mongoAddress, 'connected')
+      devLog(dbModel.nameLog, mongoAddress, 'connected')
       resolve(dbModel)
 
     })
@@ -141,7 +141,7 @@ global.getRepoDbModel = (memberId, dbName, dbServer) =>
 
     dbModel.conn.on('disconnected', () => {
       dbModel.conn.active = false
-      eventLog(dbModel.nameLog, 'disconnected')
+      devLog(dbModel.nameLog, 'disconnected')
     })
 
     // connectMongoDatabase('collections/repo', mongoAddress, dbModel)

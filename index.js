@@ -14,7 +14,7 @@
 	await require('./db')()
 	var app = await require('./app')()
 	var httpServer = await require('./lib/http-server')(process.env.HTTP_PORT, app)
-
+	var sync = await require('./sync/index')
 	// await require('./wss-api/wss-api')(httpServer)
 
 
@@ -23,7 +23,8 @@
 		eventLog(`Application was started properly :-)`.yellow)
 		process.env.NODE_ENV == 'development' && console.log(`\nhttp://localhost:${process.env.HTTP_PORT}\n`)
 		// console.log(process.env.EMAIL_RESETPASS_TEMPLATE || 'EMAIL_RESETPASS_TEMPLATE')
-
+		sync.start()
+		// console.log(util.camelize(`şeh  Ü.ç çam merhaba`))
 		test()
 	}, 1000)
 
