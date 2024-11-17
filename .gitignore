@@ -130,4 +130,6 @@ dist
 .pnp.*
 
 !!__*
+
 * copy*
+controllers/!!__repo/*
