@@ -168,7 +168,7 @@ function post(dbModel, sessionDoc, req) {
 
       data.identifier = await generateDatabaseIdentifier(data.identifier)
       data.dbHost = process.env.MONGODB_SERVER1_URI || 'mongodb://localhost:27017/'
-      data.dbName = userDbPrefix + data.identifier
+      data.dbName = userDbPrefix + data.identifier.replace('-', '_')
       data.owner = ownerDoc._id
       const newDoc = new dbModel.stores(data)
 
@@ -263,8 +263,8 @@ async function generateDatabaseIdentifier(identifier, sayi = 0) {
   return new Promise(async (resolve, reject) => {
     identifier = identifier
       .toLowerCase()
-      .replaceAll(' ', '_')
-      .replaceAll('-', '_')
+      .replaceAll(' ', '-')
+      .replaceAll('_', '-')
       .replace(/[^a-z0-9_]/g, '')
     if (sayi > 0) {
       identifier += sayi.toString()

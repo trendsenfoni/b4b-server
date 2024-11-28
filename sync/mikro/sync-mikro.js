@@ -79,7 +79,7 @@ exports.syncMikroStokKart = function (dbModel, store) {
       mikroHelper.stokKartlari(store.connector, lastModified)
         .then(async result => {
           result.forEach(async e => {
-            // console.log(e.name)
+
             await dbModel.items.updateOne({ code: e.code }, {
               $set: {
                 code: e.code,
@@ -98,6 +98,51 @@ exports.syncMikroStokKart = function (dbModel, store) {
             }, { upsert: true })
           })
           devLog(`[${store.identifier}]`.cyan, `syncMikroStokKart upsert count: ${result.length}`)
+          resolve()
+        })
+        .catch(reject)
+
+    } catch (err) {
+      reject(err)
+    }
+  })
+
+}
+
+exports.syncMikroStokFiyatlar = function (dbModel, store) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const docs = await dbModel.prices.find({}).sort({ lastModified: -1 }).limit(1)
+      let lastModified = '1900-01-01'
+      if (docs.length > 0) lastModified = docs[0].lastModified
+
+      mikroHelper.stokSatisFiyatlari(store.connector, lastModified)
+        .then(async result => {
+          result.forEach(async e => {
+            if (!currencyList.includes(e.currency)) {
+              e.currency = 'TRY'
+            }
+            const itemDoc = await dbModel.items.findOne({ code: e.code })
+            if (itemDoc) {
+              await dbModel.prices.updateOne({ code: e.code, priceGroup: e.priceGroup }, {
+                $set: {
+                  item: itemDoc._id,
+                  priceGroup: e.priceGroup,
+                  code: e.code,
+                  price: e.price,
+                  currency: e.currency,
+                  discountGroup: e.discountGroup,
+                  campaignCode: e.campaignCode,
+                  warehouseCode: e.warehouseCode,
+                  unit: e.unit,
+                  lastModified: e.lastModified
+                }
+              }, { upsert: true })
+            } else {
+              console.log('itemDoc not found e.code:', e.code)
+            }
+          })
+          devLog(`[${store.identifier}]`.cyan, `syncMikroStokFiyatlar upsert count: ${result.length}`)
           resolve()
         })
         .catch(reject)

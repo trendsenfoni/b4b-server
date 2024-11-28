@@ -3,7 +3,7 @@ const collectionName = path.basename(__filename, '.collection.js')
 module.exports = function (dbModel) {
 	let schema = mongoose.Schema(
 		{
-			type: { type: String, enum: ['customer', 'vendor'], index: true },
+			type: { type: String, enum: ['customer', 'vendor'], default: 'customer', index: true },
 			code: { type: String, required: true, unique: true },
 			name: { type: String, default: '', index: true },
 			description: { type: String, default: '' },
@@ -36,6 +36,9 @@ module.exports = function (dbModel) {
 					name: { type: String, default: '' }
 				},
 			},
+			salesman: { type: String, default: '', index: true },
+			priceGroup: { type: String, default: '', index: true },
+			discountGroup: { type: String, default: '', index: true },
 			passive: { type: Boolean, default: false, index: true },
 			lastModified: { type: String, default: '', index: true },
 		},

@@ -8,7 +8,7 @@ module.exports = function (dbModel) {
 			brand: { type: String, default: '', index: true },
 			code: { type: String, unique: true },
 			name: { type: String, default: '', index: true },
-			description: { type: String, default: '' },
+			description: { type: String, default: '', index: true },
 			manufacturerCode: { type: String, default: '', index: true },
 			barcode: { type: String, default: '', index: true },
 			vatRate: { type: Number, default: 0 },

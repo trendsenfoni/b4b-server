@@ -39,7 +39,7 @@ module.exports = (app) => {
   // managerControllers(app, '/api/v1/manager/:func/:param1/:param2/:param3')
 
   s3Controllers(app, '/api/v1/s3/:func/:param1/:param2/:param3')
-  // repoControllers(app, '/api/v1/db/:func/:param1/:param2/:param3')
+
   pubControllers(app, '/api/v1/pub/:func/:param1/:param2/:param3')
 
   storeAuthControllers(app, '/api/v1/:store/auth/:func/:param1/:param2/:param3')
@@ -58,25 +58,63 @@ module.exports = (app) => {
   })
 }
 
+function getStore(req) {
+  return new Promise((resolve, reject) => {
+    const identifier = req.params.store
+    if (!identifier) return reject(`store required`)
+    db.stores
+      .findOne({ identifier: identifier })
+      .then(storeDoc => {
+        if (!storeDoc) return reject(`store not found`)
+        if (storeDoc.passive) return reject(`the store is inactive`)
+        if (storeDoc.serviceExpireDate < new Date()) return reject(`store service period has expired`)
+        getStoreDbModel(null, storeDoc.dbName, 'server1')
+          .then(dbModel => {
+            resolve({
+              storeDoc: storeDoc,
+              dbModel: dbModel
+            })
+          })
+          .catch(reject)
+
+      })
+      .catch(reject)
+
+  })
+}
 
 function storeAuthControllers(app, route) {
   setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/auth', req.params.func)
+    const ctl = getController('/store/auth', req.params.func)
     let spam = spamCheck(req.IP)
     if (!spam) {
       if (ctl) {
-        ctl(req)
-          .then((data) => {
-            if (data == undefined) res.json({ success: true })
-            else if (data == null) res.json({ success: true })
-            else {
-              res.status(200).json({
-                success: true,
-                data: data,
+        getStore(req)
+          .then(result => {
+
+            ctl(result.dbModel, result.storeDoc, req)
+              .then((data) => {
+                if (data == undefined) res.json({ success: true })
+                else if (data == null) res.json({ success: true })
+                else {
+                  res.status(200).json({
+                    success: true,
+                    data: data,
+                  })
+                }
               })
-            }
+              .catch(next)
+              .finally(() => {
+                setTimeout(() => {
+                  result.dbModel.conn.close()
+                  result.dbModel.free()
+                  result.dbModel = undefined
+                }, 1000)
+              })
+
           })
           .catch(next)
+
       } else next()
     } else {
       next(`Suspicious login attempts. Try again after ${spam} seconds.`)
@@ -86,53 +124,77 @@ function storeAuthControllers(app, route) {
 
 function storeSessionControllers(app, route) {
   setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/session', req.params.func)
+    const ctl = getController('/store/session', req.params.func)
     if (ctl) {
-      storePassport(req)
-        .then((sessionDoc) => {
-          ctl(db, sessionDoc, req)
-            .then((data) => {
-              if (data == undefined) res.json({ success: true })
-              else if (data == null) res.json({ success: true })
-              else {
-                res.status(200).json({ success: true, data: data })
-              }
+      getStore(req)
+        .then(result => {
+          storePassport(result.dbModel, req)
+            .then((sessionDoc) => {
+              ctl(result.dbModel, result.storeDoc, sessionDoc, req)
+                .then((data) => {
+                  if (data == undefined) res.json({ success: true })
+                  else if (data == null) res.json({ success: true })
+                  else {
+                    res.status(200).json({ success: true, data: data })
+                  }
+                })
+                .catch(next)
+                .finally(() => {
+                  setTimeout(() => {
+                    result.dbModel.conn.close()
+                    result.dbModel.free()
+                    result.dbModel = undefined
+                  }, 1000)
+                })
             })
-            .catch(next)
+            .catch((err) => {
+              res.status(401).json({ success: false, error: err })
+            })
+
         })
-        .catch((err) => {
-          res.status(401).json({ success: false, error: err })
-        })
+        .catch(next)
+
     } else next()
   })
 }
-
 
 function storeControllers(app, route) {
   setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/master', req.params.func)
+    const ctl = getController('/store', req.params.func)
     if (ctl) {
-      storePassport(req)
-        .then((sessionDoc) => {
-          ctl(db, sessionDoc, req)
-            .then((data) => {
-              if (data == undefined) res.json({ success: true })
-              else if (data == null) res.json({ success: true })
-              else {
-                res.status(200).json({ success: true, data: data })
-              }
+      getStore(req)
+        .then(result => {
+          storePassport(result.dbModel, req)
+            .then((sessionDoc) => {
+              ctl(result.dbModel, result.storeDoc, sessionDoc, req)
+                .then((data) => {
+                  if (data == undefined) res.json({ success: true })
+                  else if (data == null) res.json({ success: true })
+                  else {
+                    res.status(200).json({ success: true, data: data })
+                  }
+                })
+                .catch(next)
+                .finally(() => {
+                  setTimeout(() => {
+                    result.dbModel.conn.close()
+                    result.dbModel.free()
+                    result.dbModel = undefined
+                  }, 1000)
+                })
             })
-            .catch(next)
+            .catch((err) => {
+              res.status(401).json({ success: false, error: err })
+            })
+
         })
-        .catch((err) => {
-          res.status(401).json({ success: false, error: err })
-        })
+        .catch(next)
     } else next()
   })
 }
 
 
-function storePassport(req) {
+function storePassport(dbModel, req) {
   return new Promise((resolve, reject) => {
     let token = req.getValue('token')
     if (token) {
@@ -140,7 +202,7 @@ function storePassport(req) {
       auth
         .verify(token)
         .then((decoded) => {
-          db.sessions
+          dbModel.sessions
             .findOne({ _id: decoded.sessionId })
             .then((sessionDoc) => {
 
@@ -234,48 +296,6 @@ function managerControllers(app, route) {
   })
 }
 
-
-
-function repoControllers(app, route) {
-  setRoutes(app, route, (req, res, next) => {
-    const ctl = getController('/repo', req.params.func)
-    if (ctl) {
-      passport(req)
-        .then(async sessionDoc => {
-          if (!sessionDoc) return reject('Unauthorized operation. {token} is empty. Please log in again.')
-          if (!sessionDoc.db) return reject('Database not selected')
-          const dbDoc = await db.databases.findOne({
-            $or: [{ owner: sessionDoc.member }, { 'team.teamMember': sessionDoc.member }]
-            , passive: false
-          })
-          if (!dbDoc) return reject(`Database not found`)
-          getRepoDbModel(sessionDoc.member, dbDoc.dbName, 'server1')
-            .then(dbModel => {
-              ctl(dbModel, sessionDoc, req)
-                .then((data) => {
-                  if (data == undefined) res.json({ success: true })
-                  else if (data == null) res.json({ success: true })
-                  else {
-                    res.status(200).json({ success: true, data: data })
-                  }
-                })
-                .catch(next)
-                .finally(() => {
-                  dbModel.free()
-                  dbModel = undefined
-                })
-            })
-            .catch(err => {
-              res.status(400).json({ success: false, error: err })
-            })
-
-        })
-        .catch((err) => {
-          res.status(401).json({ success: false, error: err })
-        })
-    } else next()
-  })
-}
 
 function adminAuthControllers(app, route) {
   setRoutes(app, route, (req, res, next) => {

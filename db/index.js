@@ -47,54 +47,54 @@ module.exports = () =>
   new Promise((resolve, reject) => {
     connectMongoDatabase('collections/master', process.env.MONGODB_URI, db)
       .then(() => {
-        initRepoDb()
+        initStoreDb()
         resolve()
       })
       .catch(reject)
   })
 
-global.repoHolder = {}
+global.storeHolder = {}
 
 var serverList = {}
 
-function connectRepoDb(mongoAddress) {
-  var repoConn = mongoose.createConnection(mongoAddress, { autoIndex: true, })
-  repoConn.on('connected', () =>
+function connectStoreDb(mongoAddress) {
+  var storeConn = mongoose.createConnection(mongoAddress, { autoIndex: true, })
+  storeConn.on('connected', () =>
     eventLog(
       `[Mongo UserDB]`.cyan,
       `${mongoAddress.brightBlue} ${'connected'.brightGreen}`
     )
   )
-  repoConn.on('error', (err) =>
+  storeConn.on('error', (err) =>
     errorLog(`${mongoAddress.brightBlue} Error:`, err)
   )
-  repoConn.on('disconnected', () =>
+  storeConn.on('disconnected', () =>
     eventLog(`${mongoAddress.brightBlue} disconnected`)
   )
-  return repoConn
+  return storeConn
 }
 
 
-function initRepoDb() {
-  collectionLoader(path.join(__dirname, 'collections/repo'), '.collection.js')
+function initStoreDb() {
+  collectionLoader(path.join(__dirname, 'collections/store'), '.collection.js')
     .then((holder) => {
-      global.repoHolder = holder
+      global.storeHolder = holder
       // if (process.env.MONGODB_SERVER1_URI) {
-      //   serverList.server1 = connectRepoDb(process.env.MONGODB_SERVER1_URI)
+      //   serverList.server1 = connectStoreDb(process.env.MONGODB_SERVER1_URI)
       // }
       // if (process.env.MONGODB_SERVER2_URI) {
-      //   serverList.server2 = connectRepoDb(process.env.MONGODB_SERVER2_URI)
+      //   serverList.server2 = connectStoreDb(process.env.MONGODB_SERVER2_URI)
       // }
       // if (process.env.MONGODB_SERVER3_URI) {
-      //   serverList.server3 = connectRepoDb(process.env.MONGODB_SERVER3_URI)
+      //   serverList.server3 = connectStoreDb(process.env.MONGODB_SERVER3_URI)
       // }
     })
     .catch((err) => {
-      errorLog('refreshRepoDb:', err)
+      errorLog('refreshStoreDb:', err)
     })
 }
 
-global.getRepoDbModel = (memberId, dbName, dbServer) =>
+global.getStoreDbModel = (memberId, dbName, dbServer) =>
   new Promise((resolve, reject) => {
     let dbModel = {
       get nameLog() {
@@ -114,8 +114,8 @@ global.getRepoDbModel = (memberId, dbName, dbServer) =>
     // dbModel.conn = db.conn.useDb(dbName)
 
     dbModel.conn.on('connected', () => {
-      Object.keys(repoHolder).forEach((key) => {
-        dbModel[key] = repoHolder[key](dbModel)
+      Object.keys(storeHolder).forEach((key) => {
+        dbModel[key] = storeHolder[key](dbModel)
       })
       dbModel.free = function () {
         Object.keys(dbModel.conn.models).forEach((key) => {
@@ -144,7 +144,7 @@ global.getRepoDbModel = (memberId, dbName, dbServer) =>
       devLog(dbModel.nameLog, 'disconnected')
     })
 
-    // connectMongoDatabase('collections/repo', mongoAddress, dbModel)
+    // connectMongoDatabase('collections/store', mongoAddress, dbModel)
     //   .then(resolve)
     //   .catch(reject)
 

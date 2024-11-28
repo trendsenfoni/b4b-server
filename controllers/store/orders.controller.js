@@ -1,22 +1,22 @@
-module.exports = (dbModel, sessionDoc, req) =>
+module.exports = (dbModel, storeDoc, sessionDoc, req) =>
   new Promise(async (resolve, reject) => {
 
     switch (req.method.toUpperCase()) {
       case 'GET':
         if (req.params.param1 != undefined) {
-          getOne(dbModel, sessionDoc, req).then(resolve).catch(reject)
+          getOne(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         } else {
-          getList(dbModel, sessionDoc, req).then(resolve).catch(reject)
+          getList(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         }
         break
       case 'POST':
-        post(dbModel, sessionDoc, req).then(resolve).catch(reject)
+        post(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         break
       case 'PUT':
-        put(dbModel, sessionDoc, req).then(resolve).catch(reject)
+        put(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         break
       case 'DELETE':
-        deleteItem(dbModel, sessionDoc, req).then(resolve).catch(reject)
+        deleteItem(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         break
       default:
         restError.method(req, reject)
@@ -24,7 +24,7 @@ module.exports = (dbModel, sessionDoc, req) =>
     }
   })
 
-function getOne(dbModel, sessionDoc, req) {
+function getOne(dbModel, storeDoc, sessionDoc, req) {
   return new Promise((resolve, reject) => {
     dbModel.orders
       .findOne({ _id: req.params.param1 })
@@ -38,7 +38,7 @@ function getOne(dbModel, sessionDoc, req) {
   })
 }
 
-function getList(dbModel, sessionDoc, req) {
+function getList(dbModel, storeDoc, sessionDoc, req) {
   return new Promise((resolve, reject) => {
     let options = {
       page: req.query.page || 1,
@@ -80,7 +80,7 @@ function getList(dbModel, sessionDoc, req) {
   })
 }
 
-function post(dbModel, sessionDoc, req) {
+function post(dbModel, storeDoc, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
 
@@ -114,7 +114,7 @@ function post(dbModel, sessionDoc, req) {
   })
 }
 
-function put(dbModel, sessionDoc, req) {
+function put(dbModel, storeDoc, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
 
@@ -140,7 +140,7 @@ function put(dbModel, sessionDoc, req) {
   })
 }
 
-function deleteItem(dbModel, sessionDoc, req) {
+function deleteItem(dbModel, storeDoc, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
       if (req.params.param1 == undefined) return restError.param1(req, reject)

@@ -1,4 +1,4 @@
-module.exports = (dbModel, sessionDoc, req) => new Promise(async (resolve, reject) => {
+module.exports = (dbModel, storeDoc, sessionDoc, req) => new Promise(async (resolve, reject) => {
 	try {
 		if (!sessionDoc) {
 			return restError.session(req, reject)
@@ -6,14 +6,14 @@ module.exports = (dbModel, sessionDoc, req) => new Promise(async (resolve, rejec
 
 		switch (req.method) {
 			case 'GET':
-				getMyProfile(dbModel, sessionDoc, req).then(resolve).catch(reject)
+				getMyProfile(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
 				break
 			case 'PUT':
 			case 'POST':
 				if (req.params.param1 == 'changePassword') {
-					changePassword(dbModel, sessionDoc, req).then(resolve).catch(reject)
+					changePassword(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
 				} else {
-					updateMyProfile(dbModel, sessionDoc, req).then(resolve).catch(reject)
+					updateMyProfile(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
 				}
 
 				break
@@ -26,7 +26,7 @@ module.exports = (dbModel, sessionDoc, req) => new Promise(async (resolve, rejec
 	}
 })
 
-function changePassword(dbModel, sessionDoc, req) {
+function changePassword(dbModel, storeDoc, sessionDoc, req) {
 	return new Promise(async (resolve, reject) => {
 		let oldPassword = req.getValue('oldPassword')
 		let newPassword = req.getValue('newPassword')
@@ -49,19 +49,18 @@ function changePassword(dbModel, sessionDoc, req) {
 	})
 }
 
-function getMyProfile(dbModel, sessionDoc, req) {
+function getMyProfile(dbModel, storeDoc, sessionDoc, req) {
 	return new Promise(async (resolve, reject) => {
 		try {
-			let doc = await dbModel.members.findOne({ _id: sessionDoc.member })
+			const doc = await dbModel.members.findOne({ _id: sessionDoc.member })
 				.select('-password')
+				.populate('firm')
 
 			if (doc) {
 				let obj = doc.toJSON()
 				obj.session = {
 					sessionId: sessionDoc._id,
 					lang: sessionDoc.lang,
-					db: sessionDoc.db,
-					dbList: sessionDoc.dbList,
 				}
 
 				resolve(obj)
@@ -73,7 +72,7 @@ function getMyProfile(dbModel, sessionDoc, req) {
 	})
 
 }
-function updateMyProfile(dbModel, sessionDoc, req) {
+function updateMyProfile(dbModel, storeDoc, sessionDoc, req) {
 	return new Promise(async (resolve, reject) => {
 		let doc = await dbModel.members.findOne({ _id: sessionDoc.member })
 		if (!doc)

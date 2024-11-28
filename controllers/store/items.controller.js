@@ -1,125 +1,159 @@
-module.exports = (dbModel, sessionDoc, req) =>
+module.exports = (dbModel, storeDoc, sessionDoc, req) =>
   new Promise(async (resolve, reject) => {
 
     switch (req.method.toUpperCase()) {
       case 'GET':
         if (req.params.param1 != undefined) {
-          getOne(dbModel, sessionDoc, req).then(resolve).catch(reject)
+          switch (req.params.param1) {
+            case 'groups':
+              getGroups(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+              break
+            case 'subGroups':
+              getSubGroups(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+              break
+            case 'category':
+            case 'categories':
+              getCategories(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+              break
+            case 'brands':
+              getBrands(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+              break
+            default:
+              getOne(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+              break
+          }
         } else {
-          getList(dbModel, sessionDoc, req).then(resolve).catch(reject)
+          getList(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         }
         break
-      case 'POST':
-        post(dbModel, sessionDoc, req).then(resolve).catch(reject)
 
-        break
-      case 'PUT':
-        put(dbModel, sessionDoc, req).then(resolve).catch(reject)
-        break
-      case 'DELETE':
-        deleteItem(dbModel, sessionDoc, req).then(resolve).catch(reject)
-        break
       default:
         restError.method(req, reject)
         break
     }
   })
 
-function getOne(dbModel, sessionDoc, req) {
+function getSubGroups(dbModel, storeDoc, sessionDoc, req) {
+  return new Promise((resolve, reject) => {
+    let filter = { passive: false }
+    if (req.query.group) {
+      filter.group = req.query.group
+    }
+    let aggregate = [{ $match: filter },
+    {
+      $group: {
+        _id: { $concat: ['$group', ';', '$subGroup'] },
+        group: { $first: '$group' },
+        subGroup: { $first: '$subGroup' },
+      }
+    }]
+    dbModel.items
+      .aggregate(aggregate)
+      .then(docs => {
+        // resolve(docs.map(e => e._id).sort())
+        resolve(docs)
+      })
+      .catch(reject)
+  })
+}
+
+function getGroups(dbModel, storeDoc, sessionDoc, req) {
+  return new Promise((resolve, reject) => {
+    let aggregate = [{ $match: { passive: false } },
+    { $group: { _id: '$group' } }]
+    dbModel.items
+      .aggregate(aggregate)
+      .then(docs => {
+        resolve(docs.map(e => e._id).sort())
+      })
+      .catch(reject)
+  })
+}
+
+function getCategories(dbModel, storeDoc, sessionDoc, req) {
+  return new Promise((resolve, reject) => {
+    let aggregate = [{ $match: { passive: false } },
+    { $group: { _id: '$category' } }]
+    dbModel.items
+      .aggregate(aggregate)
+      .then(docs => {
+        resolve(docs.map(e => e._id).sort())
+      })
+      .catch(reject)
+  })
+}
+
+function getBrands(dbModel, storeDoc, sessionDoc, req) {
+  return new Promise((resolve, reject) => {
+    let aggregate = [{ $match: { passive: false } },
+    { $group: { _id: '$brand' } }]
+    dbModel.items
+      .aggregate(aggregate)
+      .then(docs => {
+        resolve(docs.map(e => e._id).sort())
+      })
+      .catch(reject)
+  })
+}
+
+function getOne(dbModel, storeDoc, sessionDoc, req) {
   return new Promise((resolve, reject) => {
     dbModel.items
       .findOne({ _id: req.params.param1 })
-      .populate(['itemType', 'itemQuality'])
       .then(resolve)
       .catch(reject)
   })
 }
 
-function getList(dbModel, sessionDoc, req) {
-  return new Promise((resolve, reject) => {
+function getList(dbModel, storeDoc, sessionDoc, req) {
+  return new Promise(async (resolve, reject) => {
     let options = {
       page: req.query.page || 1,
       limit: req.query.pageSize || 10,
-      populate: [
-        { path: 'itemType', select: '_id name article' },
-        { path: 'itemQuality', select: '_id name article' }
+    }
+    const firmDoc = await dbModel.firms.findOne({ _id: sessionDoc.firm })
+    if (!firmDoc) return reject(`firm not found`)
+
+    let filter = { passive: false }
+    if (req.query.search) {
+      filter.$or = [
+        { code: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { name: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { description: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { group: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { subGroup: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { category: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { manufacturerCode: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { brand: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
+        { barcode: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
       ]
     }
-    let filter = {}
+
+    if (req.query.group) filter.group = req.query.group
+    if (req.query.subGroup) filter.subGroup = req.query.subGroup
+    if (req.query.category) filter.category = req.query.category
+    if (req.query.brand) filter.brand = req.query.brand
+    if (req.query.manufacturerCode) filter.manufacturerCode = { $regex: `.*${req.query.manufacturerCode}.*`, $options: 'i' }
+
     dbModel.items
       .paginate(filter, options)
-      .then(resolve).catch(reject)
-  })
-}
+      .then(async result => {
+        let list = []
+        await Promise.all(result.docs.map(async e => {
+          e.price = 0
+          e.currency = 'TRY'
+          const priceDoc = await dbModel.prices.findOne({ code: e.code, priceGroup: firmDoc.priceGroup })
+          if (priceDoc) {
+            e.price = priceDoc.price
+            e.currency = priceDoc.currency
+          }
+          e.netPrice = Math.round(100 * (e.price + e.price * e.vatRate / 100)) / 100
 
-function post(dbModel, sessionDoc, req) {
-  return new Promise(async (resolve, reject) => {
-    try {
-
-      let data = req.body || {}
-      delete data._id
-      if (!data.itemType) return reject('item type required')
-      if (!data.itemQuality) return reject('item quality required')
-      if (!data.name) return reject('name required')
-
-      const c = await dbModel.items.countDocuments({ name: data.name })
-      console.log('c:', c)
-      if (c > 0) return reject(`name already exists`)
-
-      const newDoc = new dbModel.items(data)
-
-      if (!epValidateSync(newDoc, reject)) return
-      console.log('buraya geldi2')
-      newDoc.save().then(result => {
-        console.log('result:', result)
+          list.push(e)
+        }))
+        result.docs = list
         resolve(result)
-      }).catch(err => {
-        console.log('err:', err)
-        reject(err)
-      })
-    } catch (err) {
-      reject(err)
-    }
 
-  })
-}
-
-function put(dbModel, sessionDoc, req) {
-  return new Promise(async (resolve, reject) => {
-    try {
-
-      if (req.params.param1 == undefined) return restError.param1(req, reject)
-      let data = req.body || {}
-      delete data._id
-
-      let doc = await dbModel.items.findOne({ _id: req.params.param1 })
-      if (!doc) return reject(`record not found`)
-
-      doc = Object.assign(doc, data)
-      if (!epValidateSync(doc, reject)) return
-      if (await dbModel.items.countDocuments({ name: doc.name, _id: { $ne: doc._id } }) > 0)
-        return reject(`name already exists`)
-
-      doc.save()
-        .then(resolve)
-        .catch(reject)
-    } catch (err) {
-      reject(err)
-    }
-
-  })
-}
-
-function deleteItem(dbModel, sessionDoc, req) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      if (req.params.param1 == undefined) return restError.param1(req, reject)
-
-      dbModel.items.removeOne(sessionDoc, { _id: req.params.param1 })
-        .then(resolve)
-        .catch(reject)
-    } catch (err) {
-      reject(err)
-    }
+      }).catch(reject)
   })
 }
