@@ -59,7 +59,11 @@ function saveOrder(dbModel, storeDoc, sessionDoc, req) {
         })
       }))
       mikroHelper.siparisKaydet(storeDoc.connector, firmDoc.code, sepet, description, 'K')
-        .then(resolve)
+        .then(async result => {
+          devLog('[saveOrder]'.cyan, 'result:', result)
+          await dbModel.carts.deleteMany({ member: sessionDoc.member }, { multi: true })
+          resolve('siparis basariyla kaydedildi')
+        })
         .catch(reject)
     } catch (err) {
       reject(err)
