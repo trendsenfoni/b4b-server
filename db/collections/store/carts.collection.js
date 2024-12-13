@@ -3,7 +3,7 @@ module.exports = function (dbModel) {
   const schema = mongoose.Schema(
     {
       member: { type: ObjectId, ref: 'members', required: true, index: true },
-      items: { type: ObjectId, ref: 'items', required: true, index: true },
+      item: { type: ObjectId, ref: 'items', required: true, index: true },
       quantity: { type: Number, default: 1 },
     },
     { versionKey: false, timestamps: true }

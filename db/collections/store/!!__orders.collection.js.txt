@@ -3,36 +3,38 @@ module.exports = function (dbModel) {
 	const schema = mongoose.Schema(
 		{
 			firm: { type: ObjectId, ref: 'firms', default: null, index: true },
+			member: { type: ObjectId, ref: 'members', default: null, index: true },
 			ioType: { type: Number, required: true, index: true },
 			issueDate: { type: String, index: true, min: 10, max: 10, default: new Date().toISOString().substring(0, 10) },
 			documentNumber: { type: String, default: '' },
 			firmDocumentNumber: { type: String, default: '' },
 			lineCount: { type: Number, default: 0 },
-			quantity: { type: Number, default: 0 },
-			total: { type: Number, default: 0 },
+			tQuantity: { type: Number, default: 0 },
+			totalAmount: { type: Number, default: 0 },
 			currency: { type: String, enum: ['USD', 'TRY', 'EUR', 'RUB', 'GBP'], default: 'USD' },
 			taxAmount: { type: Number, default: 0 },
 			withHoldingTaxAmount: { type: Number, default: 0 },
-			taxInclusiveTotal: { type: Number, default: 0 },
+			taxInclusiveAmount: { type: Number, default: 0 },
 			note: { type: String, default: '' },
-			address: {
-				room: { type: String, default: '' },
-				streetName: { type: String, default: '', index: true },
-				blockName: { type: String, default: '' },
-				buildingName: { type: String, default: '' },
-				buildingNumber: { type: String, default: '' },
-				citySubdivisionName: { type: String, default: '' },
-				cityName: { type: String, default: '', index: true },
-				postalZone: { type: String, default: '' },
-				postbox: { type: String, default: '' },
-				region: { type: String, default: '' },
-				district: { type: String, default: '', index: true },
-				country: {
-					identificationCode: { type: String, default: '' },
-					name: { type: String, default: '' }
-				}
-			},
-			closed: { type: Boolean, default: false, index: true },
+			lines: [{
+				item: { type: ObjectId, ref: 'items', index: true },
+				quantity: { type: Number, default: 0 },
+				price: { type: Number, default: 0 },
+				amount: { type: Number, default: 0 },
+				taxRate: { type: Number, default: 0 },
+				withHoldingTaxRate: { type: Number, default: 0 },
+				withHoldingTaxAmount: { type: Number, default: 0 },
+				taxAmount: { type: Number, default: 0 },
+				lineAmount: { type: Number, default: 0 },
+			}],
+			transferred: { type: Boolean, default: false, index: true },
+			transferDate: { type: Date, default: null },
+			transferParam1: { type: String, default: '' },
+			transferParam2: { type: String, default: '' },
+			transferParam3: { type: String, default: '' },
+			status: { type: String, default: 'pending', enum: ['pending', 'waitingForApproval', 'approved', 'declined', 'preparing', 'shipped'] },
+			shipmentDate: { type: Date, default: null }
+
 		},
 		{ versionKey: false, timestamps: true }
 	)

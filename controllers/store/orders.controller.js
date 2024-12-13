@@ -1,3 +1,4 @@
+const mikroHelper = require('../../lib/mikro/mikroHelper')
 module.exports = (dbModel, storeDoc, sessionDoc, req) =>
   new Promise(async (resolve, reject) => {
 
@@ -9,15 +10,15 @@ module.exports = (dbModel, storeDoc, sessionDoc, req) =>
           getList(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
         }
         break
-      case 'POST':
-        post(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
-        break
-      case 'PUT':
-        put(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
-        break
-      case 'DELETE':
-        deleteItem(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
-        break
+      // case 'POST':
+      //   post(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+      //   break
+      // case 'PUT':
+      //   put(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+      //   break
+      // case 'DELETE':
+      //   deleteItem(dbModel, storeDoc, sessionDoc, req).then(resolve).catch(reject)
+      //   break
       default:
         restError.method(req, reject)
         break
@@ -25,132 +26,93 @@ module.exports = (dbModel, storeDoc, sessionDoc, req) =>
   })
 
 function getOne(dbModel, storeDoc, sessionDoc, req) {
-  return new Promise((resolve, reject) => {
-    dbModel.orders
-      .findOne({ _id: req.params.param1 })
-      .then(async doc => {
-        if (!doc) return reject('order document not found')
-        let obj = doc.toJSON()
-        obj.lines = await dbModel.orderLines.find({ order: doc._id })
-        resolve(obj)
-      })
-      .catch(reject)
-  })
-}
-
-function getList(dbModel, storeDoc, sessionDoc, req) {
-  return new Promise((resolve, reject) => {
-    let options = {
-      page: req.query.page || 1,
-      limit: req.query.pageSize || 10,
-      populate: ['firm']
-    }
-    let filter = {}
-    if (req.query.firm)
-      filter.firm = req.query.firm
-
-    if (req.query.ioType)
-      filter.ioType = req.query.ioType
-
-    if (req.query.startDate && req.query.endDate) {
-      filter.issueDate = { $gte: req.query.startDate, $lte: req.query.endDate }
-    } else if (req.query.startDate && !req.query.endDate) {
-      filter.issueDate = { $gte: req.query.startDate }
-    } else if (!req.query.startDate && req.query.endDate) {
-      filter.issueDate = { $lte: req.query.endDate }
-    }
-
-
-    if (req.query.search) {
-      filter.$or = [
-        { documentNumber: { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.streetName': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.buildingName': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.citySubdivisionName': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.cityName': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.region': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.district': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-        { 'address.country.name': { $regex: `.*${req.query.search}.*`, $options: 'i' } },
-      ]
-    }
-
-    dbModel.orders
-      .paginate(filter, options)
-      .then(resolve).catch(reject)
-  })
-}
-
-function post(dbModel, storeDoc, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
-
-      let data = req.body || {}
-      delete data._id
-      if (!data.firm) return reject('firm required1')
-      if (!(data.ioType == 0 || data.ioType == 1)) return reject('ioType required')
-      if (!data.issueDate) return reject('issueDate required')
-      if (!data.documentNumber) return reject('documentNumber required')
-
-      let firmDoc = await dbModel.firms.findOne({ _id: data.firm })
+      const orderId = req.params.param1
+      const firmDoc = await dbModel.firms.findOne({ _id: sessionDoc.firm })
       if (!firmDoc) return reject(`firm not found`)
 
-      // if (await dbModel.orders.countDocuments({ firm: firmDoc._id, name: data.name }) > 0)
-      //   return reject(`name already exists`)
+      mikroHelper.siparis(storeDoc.connector, firmDoc.code, orderId)
+        .then(async docs => {
+          if (docs.length == 0)
+            return reject('order not found')
+          let obj = {
+            _id: docs[0].documentNumber,
+            issueDate: docs[0].issueDate,
+            shippedDate: docs[0].shippedDate,
+            documentNumber: docs[0].documentNumber,
+            description: docs[0].description,
+            totalAmount: 0,
+            taxAmount: 0,
+            withHoldingTaxAmount: 0,
+            taxInclusiveAmount: 0,
+            currency: docs[0].currency,
+            lineCount: docs.length,
+            lines: [],
+          }
+          await Promise.all(docs.map(async (e, index) => {
+            let line = {
+              _id: obj._id + '-' + index,
+              item: await dbModel.items.findOne({ code: e.itemCode }),
+              itemCode: e.itemCode,
+              itemName: e.itemName,
+              quantity: e.quantity,
+              deliveredQuantity: e.deliveredQuantity,
+              remainingQuantity: e.remainingQuantity,
+              price: e.price,
+              discountAmount: e.discountAmount,
+              expenseAmount: e.expenseAmount,
+              amount: e.amount,
+              taxRate: e.taxRate,
+              taxAmount: e.taxAmount,
+              withHoldingTaxAmount: e.withHoldingTaxAmount || 0,
+              taxInclusiveAmount: e.taxInclusiveAmount,
+              unit: e.unit,
+            }
+            obj.lines.push(line)
+            obj.totalAmount += line.amount
+            obj.taxAmount += line.taxAmount
+            obj.withHoldingTaxAmount += line.withHoldingTaxAmount
 
-      const newDoc = new dbModel.orders(data)
+          }))
+          obj.totalAmount = Math.round(100 * obj.totalAmount) / 100
+          obj.taxAmount = Math.round(100 * obj.taxAmount) / 100
+          obj.withHoldingTaxAmount = Math.round(100 * obj.withHoldingTaxAmount) / 100
+          obj.taxInclusiveAmount = Math.round(100 * (obj.totalAmount + obj.taxAmount - obj.withHoldingTaxAmount)) / 100
 
-      if (!epValidateSync(newDoc, reject)) return
-
-      newDoc.save()
-        .then(async newDoc => {
-
-          resolve(newDoc)
+          resolve(obj)
         })
         .catch(reject)
     } catch (err) {
       reject(err)
     }
-
   })
 }
 
-function put(dbModel, storeDoc, sessionDoc, req) {
+function getList(dbModel, storeDoc, sessionDoc, req) {
   return new Promise(async (resolve, reject) => {
     try {
+      const startDate = req.getValue('startDate') || new Date(new Date().setMonth(new Date().getMonth() - 3)).toISOString().substring(0, 10)
+      const endDate = req.getValue('endDate') || new Date().toISOString().substring(0, 10)
+      const pageSize = Number(req.getValue('pageSize') || 10)
+      const page = Number(req.getValue('page') || 1)
+      const firmDoc = await dbModel.firms.findOne({ _id: sessionDoc.firm })
+      if (!firmDoc) return reject(`firm not found`)
 
-      if (req.params.param1 == undefined) return restError.param1(req, reject)
-      let data = req.body || {}
-      delete data._id
-
-      let doc = await dbModel.orders.findOne({ _id: req.params.param1 })
-      if (!doc) return reject(`record not found`)
-
-      doc = Object.assign(doc, data)
-      if (!epValidateSync(doc, reject)) return
-      // if (await dbModel.orders.countDocuments({ name: doc.name, _id: { $ne: doc._id } }) > 0)
-      //   return reject(`name already exists`)
-
-      doc.save()
-        .then(resolve)
-        .catch(reject)
-    } catch (err) {
-      reject(err)
-    }
-
-  })
-}
-
-function deleteItem(dbModel, storeDoc, sessionDoc, req) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      if (req.params.param1 == undefined) return restError.param1(req, reject)
-
-      if (await dbModel.orderLines.countDocuments({ order: req.params.param1 }) > 0) {
-        await dbModel.orderLines.removeOne(sessionDoc, { order: req.params.param1 })
-      }
-
-      dbModel.orders.removeOne(sessionDoc, { _id: req.params.param1 })
-        .then(resolve)
+      mikroHelper.siparisler(storeDoc.connector, firmDoc.code, startDate, endDate)
+        .then(docs => {
+          let obj = {
+            docs: docs.slice((page - 1) * pageSize, page * pageSize),
+            totalDocs: docs.length,
+            pageSize: pageSize,
+            pageCount: Math.ceil(docs.length / pageSize),
+            page: page
+          }
+          obj.docs.forEach(e => {
+            e._id = e.documentNumber
+          })
+          resolve(obj)
+        })
         .catch(reject)
     } catch (err) {
       reject(err)

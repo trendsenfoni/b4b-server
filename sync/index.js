@@ -1,6 +1,6 @@
 const syncMikro = require('./mikro/sync-mikro')
-const STORE_SCAN_INTERVAL = 1000000
-const STORE_SYNC_INTERVAL = 2000000
+const STORE_SCAN_INTERVAL = 10000
+const STORE_SYNC_INTERVAL = 20000
 var storeList = {}
 exports.start = function () {
   return new Promise(async (resolve, reject) => {
@@ -40,9 +40,9 @@ function storeStart(store) {
           try {
             if (store.connector && store.connector.connectionType == 'mssql') {
               if (store.connector.mssql.mainApp == 'mikro_v16' || store.connector.mssql.mainApp == 'mikro_v17') {
-                await syncMikro.syncCariKart(dbModel, store)
-                // await syncMikro.syncMikroStokKart(dbModel, store)
-                // await syncMikro.syncMikroStokFiyatlar(dbModel, store)
+                // await syncMikro.syncCariKart(dbModel, store)
+                await syncMikro.syncMikroStokKart(dbModel, store)
+                await syncMikro.syncMikroStokFiyatlar(dbModel, store)
 
               }
 
